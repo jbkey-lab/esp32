@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../../sensor_dev_tech"
+		},
+		{
+			"name": "sensor_dev_kit",
+			"path": "."
+		},
+		{
+			"name": "serial://dev/ttyUSB0",
+			"uri": "serial:///dev/ttyusb0/"
+		}
+	],
+	"settings": {}
+}
