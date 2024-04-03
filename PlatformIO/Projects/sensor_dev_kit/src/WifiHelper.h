@@ -62,7 +62,6 @@ static int packetIndex = 0;
 static int batchIndex = 0;
 const char* message = "hello world";
 
-
 void handleLidarData() {
     while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
         if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
@@ -74,60 +73,24 @@ void handleLidarData() {
             }
         }
         if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
-            // data will be sent to server
-            udp.beginPacket(ipAddress, udpPort);
-            udp.write(batchBuffer, BATCH_SIZE * PACKET_SIZE);
-            udp.endPacket();
-            // Print the contents of batchBuffer in hexadecimal format
+            // Convert batchBuffer to a string
+            String batchString = "";
             for (int i = 0; i < BATCH_SIZE * PACKET_SIZE; ++i) {
-                Serial.print(batchBuffer[i], HEX);
-                Serial.print(" ");
+                batchString += String(batchBuffer[i], HEX); // Convert byte to hexadecimal string
+                batchString += " "; // Add space between bytes
             }
-            Serial.println(); // Print a newline
+
+            // Send the batch data as a byte array
+            udp.beginPacket(ipAddress, udpPort);
+            udp.write((const uint8_t*)batchString.c_str(), batchString.length()); // Convert the string to a byte array and send
+            udp.endPacket();
+            Serial.println("Sent batch data: " + batchString);
+
+            // Clear batchBuffer
+            memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
         }
-        delay(50);
     }
-        memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
 }
-
-// void handleLidarData() {
-
-//     while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
-
-//         if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
-//                 for (int i = 0; i < PACKET_SIZE; ++i) {
-//                     if (Serial2.available() > 0) {
-//                         uint8_t byte = Serial2.read();
-//                         batchBuffer[batchIndex++] = byte;
-//                     }
-//                 }
-//             }
-//         if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
-//            // data will be sent to server
-//             //uint8_t buffer[50] = "hello world";
-//             //This initializes udp and transfer buffer
-//             udp.beginPacket(ipAddress, udpPort);
-//             //udp.write(buffer, 11);
-//             udp.write(batchBuffer, BATCH_SIZE * PACKET_SIZE);
-//             Serial.print(batchBuffer)
-//             udp.endPacket();
-//             // memset(buffer, 0, 50);
-//             // //processing incoming packet, must be called before reading the buffer
-//             //  udp.parsePacket();
-//             // //receive response from server, it will be HELLO WORLD
-//             // if(udp.read(buffer, 50) > 0){
-//             //     Serial.print("Server to client: ");
-//             //     Serial.println((char *)buffer);
-//             // }
-//             // Serial.println("Batch sent");
-//             // batchIndex = 0;
-//             //Wait for 1 second
-//             memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
-//         }
-//         delay(50);
-//      }
-// }
-
 
 void handleReceiveIP() {
     if (server.hasArg("ip")) {
@@ -420,3 +383,67 @@ void setupAccessPointAndServer() {
     //     Serial.println("Error: Failed to begin UDP packet");
     // }
    // memset(batchBuffer, 0, BATCH_SIZE * packet_test);
+// void handleLidarData() {
+//     while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
+//         if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
+//             for (int i = 0; i < PACKET_SIZE; ++i) {
+//                 if (Serial2.available() > 0) {
+//                     uint8_t byte = Serial2.read();
+//                     batchBuffer[batchIndex++] = byte;
+//                 }
+//             }
+//         }
+//         if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
+//             // data will be sent to server
+//             udp.beginPacket(ipAddress, udpPort);
+//             udp.write(batchBuffer, BATCH_SIZE * PACKET_SIZE);
+//             udp.endPacket();
+//             // Print the contents of batchBuffer in hexadecimal format
+//             for (int i = 0; i < BATCH_SIZE * PACKET_SIZE; ++i) {
+//                 Serial.print(batchBuffer[i], HEX);
+//                 Serial.print(" ");
+//             }
+//             Serial.println(); // Print a newline
+//         }
+//        // delay(50);
+//         memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
+//     }
+// }
+
+// void handleLidarData() {
+
+//     while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
+
+//         if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
+//                 for (int i = 0; i < PACKET_SIZE; ++i) {
+//                     if (Serial2.available() > 0) {
+//                         uint8_t byte = Serial2.read();
+//                         batchBuffer[batchIndex++] = byte;
+//                     }
+//                 }
+//             }
+//         if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
+//            // data will be sent to server
+//             //uint8_t buffer[50] = "hello world";
+//             //This initializes udp and transfer buffer
+//             udp.beginPacket(ipAddress, udpPort);
+//             //udp.write(buffer, 11);
+//             udp.write(batchBuffer, BATCH_SIZE * PACKET_SIZE);
+//             Serial.print(batchBuffer)
+//             udp.endPacket();
+//             // memset(buffer, 0, 50);
+//             // //processing incoming packet, must be called before reading the buffer
+//             //  udp.parsePacket();
+//             // //receive response from server, it will be HELLO WORLD
+//             // if(udp.read(buffer, 50) > 0){
+//             //     Serial.print("Server to client: ");
+//             //     Serial.println((char *)buffer);
+//             // }
+//             // Serial.println("Batch sent");
+//             // batchIndex = 0;
+//             //Wait for 1 second
+//             memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
+//         }
+//         delay(50);
+//      }
+// }

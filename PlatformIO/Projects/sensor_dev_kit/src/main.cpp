@@ -34,6 +34,7 @@ void loop() {
     // }
     if (state == "on") {
         handleLidarData(); 
+        delay(500);
     }
         //Serial.println("Connecting to WiFi...");
     //}
