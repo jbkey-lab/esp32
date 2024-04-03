@@ -28,9 +28,13 @@ void loop() {
    // handleLidarData();
   // if (WiFi.status() == WL_CONNECTED) {
         //delay(10000);
-
-       handleLidarData(); 
-
+    // if (WiFi.status() != WL_CONNECTED) {
+    //     Serial.println("WiFi disconnected. Reconnecting...");
+    //     autoConnectWifi(); // Implement your WiFi connection logic here
+    // }
+    if (state == "on") {
+        handleLidarData(); 
+    }
         //Serial.println("Connecting to WiFi...");
     //}
     //delay(500);  // Delay of 1 second
