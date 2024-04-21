@@ -26,11 +26,15 @@ WiFiUDP udp;
 LidarPacket latestPacket;
 
 WebServer server(80);
+bool isConnected = false; // Flag to check connection status
 
 uint8_t globalByte;
 String lidarDataBuffer = "";
 String ipAddressStr = "";
 IPAddress ipAddress; // For storing the converted IP address
+
+unsigned long delayStart = 0;
+bool delayRunning = false;
 
 const int SOME_MAX_SIZE = 46 * 2; // 7200 bytes * 2 characters per byte
 const int PACKET_SIZE = sizeof(LidarPacket);
@@ -48,6 +52,7 @@ void handleRelayToggle() {
             digitalWrite(relayPin, LOW); // Turn off the relay
         }
         server.send(200, "text/plain", "Relay state set to " + state);
+        Serial.println("State is set to " + state);
     } else {
         server.send(400, "text/plain", "Missing 'state' parameter");
     } 
@@ -63,33 +68,42 @@ static int batchIndex = 0;
 const char* message = "hello world";
 
 void handleLidarData() {
-    while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
-        if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
-            for (int i = 0; i < PACKET_SIZE; ++i) {
-                if (Serial2.available() > 0) {
-                    uint8_t byte = Serial2.read();
-                    batchBuffer[batchIndex++] = byte;
+    if (state == "on") {
+        //Serial.println("state is currently: " + state);
+
+        while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
+            if (state == "off") {
+                    break; // Stop processing if state changes to 'off'
+                }
+            if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
+                for (int i = 0; i < PACKET_SIZE; ++i) {
+                    if (Serial2.available() > 0) {
+                        uint8_t byte = Serial2.read();
+                        batchBuffer[batchIndex++] = byte;
+                    }
                 }
             }
-        }
-        if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
-            // Convert batchBuffer to a string
-            String batchString = "";
-            for (int i = 0; i < BATCH_SIZE * PACKET_SIZE; ++i) {
-                batchString += String(batchBuffer[i], HEX); // Convert byte to hexadecimal string
-                batchString += " "; // Add space between bytes
+            if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
+                // Convert batchBuffer to a string
+                String batchString = "";
+                for (int i = 0; i < BATCH_SIZE * PACKET_SIZE; ++i) {
+                    batchString += String(batchBuffer[i], HEX); // Convert byte to hexadecimal string
+                    batchString += " "; // Add space between bytes
+                }
+
+                // Send the batch data as a byte array
+                udp.beginPacket(ipAddress, udpPort);
+                udp.write((const uint8_t*)batchString.c_str(), batchString.length()); // Convert the string to a byte array and send
+                udp.endPacket();
+                Serial.println("Sent batch data: " + batchString);
+
+                // Clear batchBuffer
+                memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
             }
-
-            // Send the batch data as a byte array
-            udp.beginPacket(ipAddress, udpPort);
-            udp.write((const uint8_t*)batchString.c_str(), batchString.length()); // Convert the string to a byte array and send
-            udp.endPacket();
-            Serial.println("Sent batch data: " + batchString);
-
-            // Clear batchBuffer
-            memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
         }
     }
+   // handleRelayToggle(); 
+
 }
 
 void handleReceiveIP() {
@@ -99,7 +113,7 @@ void handleReceiveIP() {
             Serial.println("Received and converted IP: " + ipAddressStr);
             // Now, you can use ipAddress with udp.begin
             delay(1000);
-            Serial.println("UDP server started");
+            //Serial.println("UDP server started");
             server.send(200, "text/plain", "IP Address received and UDP started: " + ipAddressStr);
         } else {
             Serial.println("Invalid IP address received");
@@ -110,82 +124,33 @@ void handleReceiveIP() {
     }
 }
 
-
 void handleRoot() {
   server.send(200, "text/plain", "\nConnected to Wi-Fi.");
 }
 
-void autoConnectWifi() {
-  preferences.begin("wifi", false); // Open NVS namespace "wifi" in read-only mode
-
-  // Attempt to connect using saved credentials
-  String ssid = preferences.getString("ssid", ""); // Get saved SSID, default to empty string if not found
-  String password = preferences.getString("password", ""); // Get saved password, default to empty string if not found
-
-  if (!ssid.isEmpty() && !password.isEmpty()) {
-    WiFi.begin(ssid.c_str(), password.c_str());
-
-    Serial.print("Connecting to ");
-    Serial.print(ssid);
-    Serial.println("...");
-
-    unsigned long startTime = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - startTime < 30000) { // 30-second timeout
-      delay(500);
-      Serial.print(".");
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nConnected to Wi-Fi.");
-      WiFi.softAPdisconnect(true);
-      Serial.println("Access Point Stopped");
-
-      delay(10000);
-      server.on("/wifiConnected", handleRoot);
-      delay(1000);
-
-      Serial.print("IP Address: ");
-      Serial.println(WiFi.localIP());
-      server.on("/receiveIP", HTTP_GET, handleReceiveIP);
-
-      preferences.end(); // Close the NVS namespace
-      return;
-    } else {
-      Serial.println("\nFailed to connect to saved Wi-Fi. Starting Access Point...");
-    }
-  } else {
-    Serial.println("No saved Wi-Fi credentials. Starting Access Point...");
-    //setupAccessPointAndServer()
-  }
-
-  preferences.end(); // Ensure NVS is closed if not connected
-
-  // Call function to start Access Point here if auto-connect fails
-  //setupAccessPointAndServer();
-    //server.on("/lidar", HTTP_GET, handleLidarData);
-
-    server.on("/toggleRelay", HTTP_GET, handleRelayToggle);
-
-
-    server.begin();
-}
 
 void setupAccessPointAndServer() {
     Preferences preferences; // Create a Preferences object
     preferences.begin("wifi", false); // Open the NVS namespace "wifi"
 
-    // Start ESP32 as an Access Point
-        WiFi.softAP(SSID, Password);
-        Serial.println("Access Point Started");
-        Serial.println("IP Address: ");
-        Serial.println(WiFi.softAPIP());
+   String ssid = preferences.getString("ssid", ""); // Get saved SSID, default to empty string if not found
+   String password = preferences.getString("password", ""); // Get saved password, default to empty string if not found
 
+    // Start ESP32 as an Access Point
+    WiFi.softAP(SSID, Password);
+    Serial.println("Access Point Started");
+    Serial.println("IP Address: ");
+    Serial.println(WiFi.softAPIP());
 
     // Setup server route for form submission
     server.on("/setup", HTTP_POST, [&]() { // Capture preferences by reference
         Serial.println("Received a request on /setup");
 
-        if (server.hasArg("ssid") && server.hasArg("password")) {
+        // Check for incoming SSID and password or use stored ones if present
+        String newSSID = server.hasArg("ssid") ? server.arg("ssid") : ssid;
+        String newPassword = server.hasArg("password") ? server.arg("password") : password;
+
+        if (!newSSID.isEmpty() && !newPassword.isEmpty()) {
             String newSSID = server.arg("ssid");
             String newPassword = server.arg("password");
 
@@ -205,6 +170,7 @@ void setupAccessPointAndServer() {
             newPassword.toCharArray(passwordChar, newPassword.length() + 1);
 
             // Attempt to connect to new Wi-Fi network
+
             WiFi.begin(ssidChar, passwordChar);
             unsigned long startTime = millis();
             while (WiFi.status() != WL_CONNECTED) {
@@ -218,38 +184,132 @@ void setupAccessPointAndServer() {
                     return;
                 }
             }
-            delay(10000);
 
-            WiFi.softAPdisconnect(true);
-            Serial.println("Access Point Stopped");
-            server.on("/wifiConnected", handleRoot);
-            delay(1000);
-            Serial.println("Connected to new Wi-Fi");
-            Serial.print("IP Address: ");
-            Serial.println(WiFi.localIP());
-            server.on("/receiveIP", HTTP_GET, handleReceiveIP);
+            WiFi.disconnect();
 
-            //udp.begin(ipAddress, udpPort);
+            IPAddress staticIP(WiFi.localIP()); // Example static IP
+            IPAddress gateway(WiFi.gatewayIP());    // Gateway (your router IP)
+            IPAddress subnet(WiFi.subnetMask());   // Subnet mask
+            IPAddress primaryDNS(8, 8, 8, 8);     // Primary DNS (optional)
+            IPAddress secondaryDNS(8, 8, 4, 4);   // Secondary DNS (optional)
+            
+            if (!WiFi.config(staticIP, gateway, subnet, primaryDNS, secondaryDNS)) {
+                Serial.println("STA Failed to configure");
+            }
 
+            WiFi.begin(ssidChar, passwordChar);
+            Serial.println("Static IP set to...");
+            IPAddress staticIPString = WiFi.localIP();
+            Serial.println(staticIPString);
+
+            //server.begin();
+            // Serial.println("Connected to new Wi-Fi");
+            // Serial.print("IP Address: ");
+            // Serial.println(WiFi.localIP());
             server.send(200, "text/plain", "Connected to new Wi-Fi successfully");
         } else {
             Serial.println("Missing SSID or Password in the request");
             server.send(400, "text/plain", "Missing SSID or Password");
         }
+
     });
+    //delay(10000);
+    server.on("/getIP", HTTP_GET, []() {
+        if (WiFi.status() == WL_CONNECTED) {
+            server.send(200, "text/plain", WiFi.localIP().toString());
+            Serial.println("Send localIP to swift");
+        } else {
+            server.send(404, "text/plain", "Not connected to WiFi");
+        }
+    });     
+
+    server.on("/receiveIP", HTTP_GET, handleReceiveIP);
+
+    server.on("/wifiConnected", handleRoot);
 
     preferences.end(); // Close the NVS namespace
 
-    //server.on("/lidar", HTTP_GET, handleLidarData);
+    server.on("/toggleRelay", HTTP_GET,  handleRelayToggle);
 
-    server.on("/toggleRelay", HTTP_GET, handleRelayToggle);
-
+    delay(1000);
     server.begin();
-
+    //delay(100000);
+    //isConnected = true;
+   // WiFi.softAPdisconnect(true);
+    //Serial.println("Access Point Stopped");
+    delayStart = millis();
+    delayRunning = true;
 }
 
 
 #endif
+
+// void autoConnectWifi() {
+//   preferences.begin("wifi", false); // Open NVS namespace "wifi" in read-only mode
+
+//   // Attempt to connect using saved credentials
+//   String ssid = preferences.getString("ssid", ""); // Get saved SSID, default to empty string if not found
+//   String password = preferences.getString("password", ""); // Get saved password, default to empty string if not found
+
+//   if (!ssid.isEmpty() && !password.isEmpty()) {
+//     WiFi.begin(ssid.c_str(), password.c_str());
+
+//     Serial.print("Connecting to ");
+//     Serial.print(ssid);
+//     Serial.println("...");
+
+//     unsigned long startTime = millis();
+//     while (WiFi.status() != WL_CONNECTED && millis() - startTime < 30000) { // 30-second timeout
+//       delay(500);
+//       Serial.print(".");
+//     }
+
+//     if (WiFi.status() == WL_CONNECTED) {
+//       Serial.println("\nConnected to Wi-Fi.");
+//       server.on("/status", HTTP_GET, []() {
+//                 if (WiFi.status() == WL_CONNECTED) {
+//                     server.send(200, "text/plain", WiFi.localIP().toString());
+//                 } else {
+//                     server.send(404, "text/plain", "Not connected to WiFi");
+//                 }
+//      });
+
+//       delay(10000);
+  
+//       WiFi.softAPdisconnect(true);
+//       Serial.println("Access Point Stopped");
+
+
+//       delay(1000);
+
+//       Serial.print("IP Address: ");
+//       Serial.println(WiFi.localIP());
+//       server.on("/receiveIP", HTTP_GET, handleReceiveIP);
+//       server.on("/wifiConnected", handleRoot);
+
+//       preferences.end(); // Close the NVS namespace
+//       return;
+//     } else {
+//       Serial.println("\nFailed to connect to saved Wi-Fi. Starting Access Point...");
+//     }
+//   } else {
+//     Serial.println("No saved Wi-Fi credentials. Starting Access Point...");
+//     setupAccessPointAndServer();
+//   }
+
+//   preferences.end(); // Ensure NVS is closed if not connected
+
+//   // Call function to start Access Point here if auto-connect fails
+//   //setupAccessPointAndServer();
+//     //server.on("/lidar", HTTP_GET, handleLidarData);
+
+//     server.on("/toggleRelay", HTTP_GET, handleRelayToggle);
+
+
+//     server.begin();
+// }
+
+
  // uint8_t buffer[50] = "hello world";
 
   // This initializes UDP and transfers buffer
