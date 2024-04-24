@@ -58,54 +58,6 @@ void handleRelayToggle() {
     } 
 }
 
-
-const int BATCH_SIZE = 1;  // Adjust this number based on your needs
-const IPAddress multicastAddress(239, 255, 0, 1);  // Multicast group address
-static uint8_t batchBuffer[BATCH_SIZE * PACKET_SIZE];  // Buffer to accumulate batches of packet data
-static uint8_t packetBuffer[PACKET_SIZE];  // Buffer for a single packet
-static int packetIndex = 0;
-static int batchIndex = 0;
-const char* message = "hello world";
-
-void handleLidarData() {
-    if (state == "on") {
-        //Serial.println("state is currently: " + state);
-
-        while (Serial2.available() > 0 && packetIndex < PACKET_SIZE) {
-            if (state == "off") {
-                    break; // Stop processing if state changes to 'off'
-                }
-            if ((batchIndex + PACKET_SIZE) <= BATCH_SIZE * PACKET_SIZE) { // Ensure there's room for another packet
-                for (int i = 0; i < PACKET_SIZE; ++i) {
-                    if (Serial2.available() > 0) {
-                        uint8_t byte = Serial2.read();
-                        batchBuffer[batchIndex++] = byte;
-                    }
-                }
-            }
-            if (batchIndex == BATCH_SIZE * PACKET_SIZE) {
-                // Convert batchBuffer to a string
-                String batchString = "";
-                for (int i = 0; i < BATCH_SIZE * PACKET_SIZE; ++i) {
-                    batchString += String(batchBuffer[i], HEX); // Convert byte to hexadecimal string
-                    batchString += " "; // Add space between bytes
-                }
-
-                // Send the batch data as a byte array
-                udp.beginPacket(ipAddress, udpPort);
-                udp.write((const uint8_t*)batchString.c_str(), batchString.length()); // Convert the string to a byte array and send
-                udp.endPacket();
-                Serial.println("Sent batch data: " + batchString);
-
-                // Clear batchBuffer
-                memset(batchBuffer, 0, BATCH_SIZE * PACKET_SIZE);
-            }
-        }
-    }
-   // handleRelayToggle(); 
-
-}
-
 void handleReceiveIP() {
     if (server.hasArg("ip")) {
         ipAddressStr = server.arg("ip");
@@ -230,6 +182,12 @@ void setupAccessPointAndServer() {
     preferences.end(); // Close the NVS namespace
 
     server.on("/toggleRelay", HTTP_GET,  handleRelayToggle);
+
+    server.on("/toggleValve", HTTP_GET, handleToggleValve);
+
+    server.on("/flowrate", HTTP_GET, handleFlowRate); // Endpoint to get the flow rate
+
+    server.on("/waterdrops", HTTP_GET, handleWaterDropSensor);
 
     delay(1000);
     server.begin();
