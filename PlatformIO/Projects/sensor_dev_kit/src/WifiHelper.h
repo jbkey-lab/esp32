@@ -9,6 +9,7 @@
 #include <Preferences.h>
 #include <WiFiUdp.h>
 #include <AsyncUDP.h>
+#include "SensorHelper.h"
 
 Preferences preferences;
 
@@ -19,26 +20,26 @@ const char* Password = "123456789"; // Replace with your network password
 
 bool relayState = false; // Variable to hold the relay state
 const int relayPin = 13;  // Relay connected to GPIO 13
-String state = "";
-WiFiUDP udp;
+// String state = "";
+// WiFiUDP udp;
 //AsyncUDP udp;
 
 LidarPacket latestPacket;
-
-WebServer server(80);
+//
+//WebServer server(80);
 bool isConnected = false; // Flag to check connection status
 
 uint8_t globalByte;
 String lidarDataBuffer = "";
 String ipAddressStr = "";
-IPAddress ipAddress; // For storing the converted IP address
+//IPAddress ipAddress; // For storing the converted IP address
 
 unsigned long delayStart = 0;
 bool delayRunning = false;
 
 const int SOME_MAX_SIZE = 46 * 2; // 7200 bytes * 2 characters per byte
-const int PACKET_SIZE = sizeof(LidarPacket);
-unsigned int udpPort = 8042; // Example port number
+//const int PACKET_SIZE = sizeof(LidarPacket);
+//unsigned int udpPort = 8042; // Example port number
 const char* data = "Hello, UDP!";
 char incomingPacket[255];  // Buffer for incoming packets
 const int rele = 23;
@@ -188,6 +189,8 @@ void setupAccessPointAndServer() {
     server.on("/flowrate", HTTP_GET, handleFlowRate); // Endpoint to get the flow rate
 
     server.on("/waterdrops", HTTP_GET, handleWaterDropSensor);
+
+    server.on("/temp", HTTP_GET, tempSensor);
 
     delay(1000);
     server.begin();
